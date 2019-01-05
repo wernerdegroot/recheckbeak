@@ -1,0 +1,29 @@
+{
+  "name": "recheckbeak",
+  "version": "1.0.0",
+  "description": "Re-compile after applying Typescript transforms",
+  "main": "index.js",
+  "scripts": {
+    "tsc": "tsc -p .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wernerdegroot/recheckbeak.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/wernerdegroot/recheckbeak/issues"
+  },
+  "homepage": "https://github.com/wernerdegroot/recheckbeak#readme",
+  "devDependencies": {
+    "@types/node": "10.12.18",
+    "@types/tmp": "0.0.33",
+    "typescript": "3.2.2"
+  },
+  "dependencies": {
+    "mkdir-recursive": "^0.4.0",
+    "tmp": "0.0.33"
+  }
+}

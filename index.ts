@@ -1,30 +1,33 @@
 import * as ts from "typescript";
 import * as path from "path";
-import * as tmp from "tmp";
-import * as fx from "mkdir-recursive";
+import { FileSystem } from "./FileSystem";
+import { defaultFileSystem } from "./defaultFileSystem";
 
 type Substitute = Readonly<{
   fromPath: string;
   toPath: string;
 }>;
 
-function getPreTransformParseConfigHost(): ts.ParseConfigHost {
+function getPreTransformParseConfigHost(
+  fileSystem: FileSystem
+): ts.ParseConfigHost {
   return {
-    fileExists: ts.sys.fileExists,
-    readFile: ts.sys.readFile,
-    readDirectory: ts.sys.readDirectory,
+    fileExists: fileSystem.fileExists,
+    readFile: fileSystem.readFile,
+    readDirectory: fileSystem.readDirectory,
     useCaseSensitiveFileNames: true
   };
 }
 
 function getPostTransformParseConfigHost(
+  fileSystem: FileSystem,
   substitutes: Substitute[]
 ): ts.ParseConfigHost {
   return {
     fileExists(path: string): boolean {
       const substitute = substitutes.find(s => s.fromPath === path);
       if (substitute === undefined) {
-        return ts.sys.fileExists(path);
+        return fileSystem.fileExists(path);
       } else {
         return true;
       }
@@ -33,7 +36,7 @@ function getPostTransformParseConfigHost(
       const substitute = substitutes.find(s => s.fromPath === path);
       const pathOrSubstitutePath =
         substitute === undefined ? path : substitute.toPath;
-      return ts.sys.readFile(pathOrSubstitutePath);
+      return fileSystem.readFile(pathOrSubstitutePath);
     },
     readDirectory(): ReadonlyArray<string> {
       return substitutes.map(s => s.fromPath);
@@ -42,27 +45,27 @@ function getPostTransformParseConfigHost(
   };
 }
 
-export function recheck(
+export const recheck = (fileSystem: FileSystem) => (
   tsConfigFileName: string,
   transformers: ts.TransformerFactory<ts.SourceFile>[]
-): string[] {
+): string[] => {
   // Create a `FormatDiagnosticHost` which will be used to format diagnostics.
   // Because it is used so much, create it this early.
   const defaultFormatHost: ts.FormatDiagnosticsHost = {
-    getCurrentDirectory: ts.sys.getCurrentDirectory,
+    getCurrentDirectory: fileSystem.getCurrentDirectory,
     getCanonicalFileName: fileName => fileName,
     getNewLine: () => ts.sys.newLine
   };
 
   // Check if the `tsconfig.json` exists:
-  if (!ts.sys.fileExists(tsConfigFileName)) {
+  if (!fileSystem.fileExists(tsConfigFileName)) {
     return [`Configuration file ${tsConfigFileName} does not exist.`];
   }
 
   // Read the `tsconfig.json`, and report any errors that occur:
   const tsConfigFileContents = ts.readConfigFile(
     tsConfigFileName,
-    ts.sys.readFile
+    fileSystem.readFile
   );
 
   if (tsConfigFileContents.error !== undefined) {
@@ -78,7 +81,9 @@ export function recheck(
   const tsConfigRootDirectory = path.dirname(tsConfigFileName);
 
   // Create a `ParseConfigHost`:
-  const preTransformParseConfigHost = getPreTransformParseConfigHost();
+  const preTransformParseConfigHost = getPreTransformParseConfigHost(
+    fileSystem
+  );
 
   // Actually parse the `tsconfig.json`, and report any errors that occur:
   const preTransformParsedCommandLine = ts.parseJsonConfigFileContent(
@@ -97,8 +102,7 @@ export function recheck(
   }
 
   // Create a temporary directory in which to store the transformed files:
-  const createTemporaryDirectoryResult = tmp.dirSync({ unsafeCleanup: true });
-  const temporaryDirectoryPath = createTemporaryDirectoryResult.name;
+  const temporaryDirectoryPath = fileSystem.createTemporaryDirectory();
 
   const substitutes: Substitute[] = [];
   const errors: string[] = [];
@@ -112,7 +116,7 @@ export function recheck(
   // the result to the temporary directory as a .ts-file.
   preTransformParsedCommandLine.fileNames.forEach(fileName => {
     // Read the file:
-    const fileContents = ts.sys.readFile(fileName);
+    const fileContents = fileSystem.readFile(fileName);
 
     // Skip the file if the file could not be read:
     if (fileContents === undefined) {
@@ -163,17 +167,13 @@ export function recheck(
         toPath: absoluteTemporaryPathName
       });
 
-      // Write the file to disk, making sure that the path exists:
-      const absoluteTemporaryDirectory = path.dirname(
-        absoluteTemporaryPathName
-      );
-      fx.mkdirSync(absoluteTemporaryDirectory);
-      ts.sys.writeFile(absoluteTemporaryPathName, printed);
+      fileSystem.writeFile(absoluteTemporaryPathName, printed);
     });
   });
 
   // Create another `ParseConfigHost`:
   const postTransformParseConfigHost = getPostTransformParseConfigHost(
+    fileSystem,
     substitutes
   );
 
@@ -198,11 +198,9 @@ export function recheck(
     .getSemanticDiagnostics()
     .concat(program.getSyntacticDiagnostics());
 
-  createTemporaryDirectoryResult.removeCallback();
-
   return [
     ts.formatDiagnosticsWithColorAndContext(allDiagnostics, defaultFormatHost)
   ];
-}
+};
 
-console.error(...recheck(process.argv[2], []));
+console.error(...recheck(defaultFileSystem)(process.argv[2], []));

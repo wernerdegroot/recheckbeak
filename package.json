@@ -4,8 +4,12 @@
   "description": "Re-compile after applying Typescript transforms",
   "main": "index.js",
   "scripts": {
-    "tsc": "tsc -p .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run clean && tsc -p . --p tsconfig.test.json && jest --no-cache",
+    "coverage": "npm run clean && tsc -p . --p tsconfig.test.json && jest --no-cache --coverage",
+    "clean": "find . -name \"*.js\" -maxdepth 1 -delete && find test -name \"*.js\" -maxdepth 1 -delete",
+    "tsc": "tsc",
+    "compile": "npm run clean && tsc -p .",
+    "prepublishOnly": "npm run test && npm run compile"
   },
   "repository": {
     "type": "git",
@@ -18,12 +22,14 @@
   },
   "homepage": "https://github.com/wernerdegroot/recheckbeak#readme",
   "devDependencies": {
+    "@types/jest": "^23.3.12",
     "@types/node": "10.12.18",
     "@types/tmp": "0.0.33",
-    "typescript": "3.2.2"
+    "jest": "^23.6.0"
   },
   "dependencies": {
-    "mkdir-recursive": "^0.4.0",
+    "typescript": "3.2.2",
+    "mkdir-recursive": "0.4.0",
     "tmp": "0.0.33"
   }
 }
